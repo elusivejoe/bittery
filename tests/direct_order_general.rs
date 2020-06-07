@@ -1,7 +1,7 @@
 use bittery::{BitOrder, BitReader, ReadOrder};
 
 #[test]
-fn general_be() {
+fn direct_general_be() {
     let bytes = [0b11100111, 0b10100110, 0b11110100, 0b00100010, 0b00000111];
 
     let mut reader = BitReader::new(&bytes, BitOrder::BigEndian, ReadOrder::Direct);
@@ -36,7 +36,7 @@ fn general_be() {
 }
 
 #[test]
-fn general_le() {
+fn direct_general_le() {
     let bytes = [0b11100111, 0b00110110, 0b01100010, 0b10100110, 0b00000110];
 
     let mut reader = BitReader::new(&bytes, BitOrder::LittleEndian, ReadOrder::Direct);

@@ -1,7 +1,7 @@
 use bittery::{BitOrder, BitReader, ReadOrder};
 
 #[test]
-fn edge_cases_be() {
+fn direct_edge_cases_be() {
     let bytes = [0b10100110, 0b00110110, 0b00100011];
 
     let mut reader = BitReader::new(&bytes, BitOrder::BigEndian, ReadOrder::Direct);
@@ -42,7 +42,7 @@ fn edge_cases_be() {
 }
 
 #[test]
-fn edge_cases_le() {
+fn direct_edge_cases_le() {
     let bytes = [0b10100110, 0b00110110, 0b10100011];
 
     let mut reader = BitReader::new(&bytes, BitOrder::LittleEndian, ReadOrder::Direct);
