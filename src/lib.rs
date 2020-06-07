@@ -1,12 +1,16 @@
 //TODO: Support for all integer types
 //TODO: Better error handling
-//TODO: Ability to read in reverse direction
 //TODO: Ability to wrap around io::Read implementors
+
+mod data_accessor;
+
+use data_accessor::DataAccessor;
+pub use data_accessor::ReadOrder;
 
 pub struct BitReader<'a> {
     current_position: u64,
     bits_len: u64,
-    data: &'a [u8],
+    data: DataAccessor<'a>,
     bit_order: BitOrder,
 }
 
@@ -16,11 +20,11 @@ pub enum BitOrder {
 }
 
 impl BitReader<'_> {
-    pub fn new(data: &[u8], bit_order: BitOrder) -> BitReader {
+    pub fn new(data: &[u8], bit_order: BitOrder, read_order: ReadOrder) -> BitReader {
         BitReader {
             current_position: 0,
             bits_len: (data.len() * 8) as u64,
-            data,
+            data: DataAccessor::new(data, read_order),
             bit_order,
         }
     }
@@ -50,9 +54,9 @@ impl BitReader<'_> {
         let start_bit_relative = (self.current_position % 8) as u16;
 
         let portion = if start_bit_relative + nbits > 8 {
-            [self.data[start_byte], self.data[start_byte + 1]]
+            [self.data.get(start_byte), self.data.get(start_byte + 1)]
         } else {
-            [self.data[start_byte], 0u8]
+            [self.data.get(start_byte), 0u8]
         };
 
         let portion = if let BitOrder::BigEndian = self.bit_order {
