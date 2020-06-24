@@ -1,8 +1,10 @@
-//TODO: Support for all integer types
 //TODO: Better error handling
 //TODO: Ability to wrap around io::Read implementors
+//TODO: Better navigation like move(Forward(10))
+//TODO: Support for Huffman codes
 
 mod data_accessor;
+mod integer;
 
 use data_accessor::DataAccessor;
 pub use data_accessor::ReadOrder;
@@ -42,38 +44,52 @@ impl BitReader<'_> {
         self.current_position = pos;
     }
 
-    pub fn read(&mut self, nbits: u8) -> Option<u16> {
-        let nbits = nbits as u16;
-        assert!(nbits <= 16);
+    pub fn read<T>(&mut self, nbits: u8) -> Option<T>
+    where
+        T: integer::Integer
+            + Copy
+            + From<u8>
+            + std::ops::Shr<Output = T>
+            + std::ops::BitAnd<Output = T>,
+    {
+        assert!(nbits > 0);
+
+        let type_size = (std::mem::size_of::<T>() * 8) as u8;
+
+        assert!(nbits <= type_size);
 
         if self.current_position + nbits as u64 > self.bits_len {
             return None;
         }
 
-        let start_byte = (self.current_position / 8) as usize;
-        let start_bit_relative = (self.current_position % 8) as u16;
+        let mut buffer = [0u8; 16];
+        let mut buf_idx = 0;
 
-        let portion = if start_bit_relative + nbits > 8 {
-            [self.data.get(start_byte), self.data.get(start_byte + 1)]
-        } else {
-            [self.data.get(start_byte), 0u8]
-        };
+        let start_byte = (self.current_position / 8) as usize;
+        let end_byte = ((self.current_position + (nbits - 1) as u64) / 8) as usize;
+
+        for index in start_byte..=end_byte {
+            buffer[buf_idx] = self.data.get(index);
+            buf_idx += 1;
+        }
 
         let portion = if let BitOrder::BigEndian = self.bit_order {
-            u16::from_be_bytes(portion)
+            T::from_be(&buffer[0..std::mem::size_of::<T>()])
         } else {
-            u16::from_le_bytes(portion)
+            T::from_le(&buffer[0..std::mem::size_of::<T>()])
         };
+
+        let start_bit_relative = (self.current_position % 8) as u8;
 
         self.current_position += nbits as u64;
 
         if let BitOrder::LittleEndian = self.bit_order {
-            let mask = 0b1111111111111111u16 >> 16 - nbits;
-            Some((portion >> start_bit_relative) & mask)
+            let mask = T::max_value() >> (type_size - nbits).into();
+            Some((portion >> start_bit_relative.into()) & mask)
         } else {
-            let mask = 0b1111111111111111u16 >> start_bit_relative;
-            let right_boundary_shift = 16 - (nbits + start_bit_relative);
-            Some((portion & mask) >> right_boundary_shift)
+            let mask = T::max_value() >> start_bit_relative.into();
+            let right_boundary_shift = type_size - (nbits + start_bit_relative);
+            Some((portion & mask) >> right_boundary_shift.into())
         }
     }
 }
