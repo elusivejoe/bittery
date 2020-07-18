@@ -1,10 +1,10 @@
-use bittery::{BitOrder, BitReader, ReadOrder};
+use bittery::{BitOrder, BitReader};
 
 #[test]
 fn direct_boundary_conditions_be() {
     let bytes = [0b10100110, 0b00110110, 0b00100011];
 
-    let mut reader = BitReader::new(&bytes, BitOrder::BigEndian, ReadOrder::Direct);
+    let mut reader = BitReader::new(&bytes, BitOrder::BigEndian);
     assert_eq!(reader.current_position(), 0);
     assert_eq!(reader.bits_len(), 24);
 
@@ -45,7 +45,7 @@ fn direct_boundary_conditions_be() {
 fn direct_boundary_conditions_le() {
     let bytes = [0b10100110, 0b00110110, 0b10100011];
 
-    let mut reader = BitReader::new(&bytes, BitOrder::LittleEndian, ReadOrder::Direct);
+    let mut reader = BitReader::new(&bytes, BitOrder::LittleEndian);
     assert_eq!(reader.current_position(), 0);
     assert_eq!(reader.bits_len(), 24);
 

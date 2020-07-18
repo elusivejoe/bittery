@@ -3,16 +3,12 @@
 //TODO: Better navigation like move(Forward(10))
 //TODO: Support for Huffman codes
 
-mod data_accessor;
-mod integer;
-
-use data_accessor::DataAccessor;
-pub use data_accessor::ReadOrder;
+mod convert;
 
 pub struct BitReader<'a> {
     current_position: u64,
     bits_len: u64,
-    data: DataAccessor<'a>,
+    data: &'a [u8],
     bit_order: BitOrder,
 }
 
@@ -22,11 +18,11 @@ pub enum BitOrder {
 }
 
 impl BitReader<'_> {
-    pub fn new(data: &[u8], bit_order: BitOrder, read_order: ReadOrder) -> BitReader {
+    pub fn new(data: &[u8], bit_order: BitOrder) -> BitReader {
         BitReader {
             current_position: 0,
             bits_len: (data.len() * 8) as u64,
-            data: DataAccessor::new(data, read_order),
+            data,
             bit_order,
         }
     }
@@ -44,52 +40,56 @@ impl BitReader<'_> {
         self.current_position = pos;
     }
 
-    pub fn read<T>(&mut self, nbits: u8) -> Option<T>
-    where
-        T: integer::Integer
-            + Copy
-            + From<u8>
-            + std::ops::Shr<Output = T>
-            + std::ops::BitAnd<Output = T>,
-    {
+    pub fn read<T: convert::FromU128>(&mut self, nbits: u8) -> Option<T> {
         assert!(nbits > 0);
 
         let type_size = (std::mem::size_of::<T>() * 8) as u8;
 
         assert!(nbits <= type_size);
 
-        if self.current_position + nbits as u64 > self.bits_len {
+        let nbits = nbits as u64;
+
+        if self.current_position + nbits > self.bits_len {
             return None;
         }
 
-        let mut buffer = [0u8; 16];
-        let mut buf_idx = 0;
-
         let start_byte = (self.current_position / 8) as usize;
-        let end_byte = ((self.current_position + (nbits - 1) as u64) / 8) as usize;
+        let end_byte = ((self.current_position + (nbits - 1)) / 8) as usize;
+
+        let mut portion = 0u128;
 
         for index in start_byte..=end_byte {
-            buffer[buf_idx] = self.data.get(index);
-            buf_idx += 1;
+            let current = {
+                if let BitOrder::BigEndian = self.bit_order {
+                    self.data[index]
+                } else {
+                    self.data[end_byte - (index - start_byte)]
+                }
+            };
+
+            portion <<= 8;
+            portion |= current as u128;
         }
 
-        let portion = if let BitOrder::BigEndian = self.bit_order {
-            T::from_be(&buffer[0..std::mem::size_of::<T>()])
+        let mask = u128::MAX >> (128 - nbits);
+
+        let result = if let BitOrder::BigEndian = self.bit_order {
+            let end_bit_relative = (self.current_position + nbits) % 8;
+
+            let right_shift = if end_bit_relative > 0 {
+                8 - end_bit_relative
+            } else {
+                0
+            } as u128;
+
+            (portion >> right_shift) & mask
         } else {
-            T::from_le(&buffer[0..std::mem::size_of::<T>()])
+            let start_bit_relative = self.current_position % 8;
+            (portion >> start_bit_relative as u128) & mask
         };
 
-        let start_bit_relative = (self.current_position % 8) as u8;
+        self.current_position += nbits;
 
-        self.current_position += nbits as u64;
-
-        if let BitOrder::LittleEndian = self.bit_order {
-            let mask = T::max_value() >> (type_size - nbits).into();
-            Some((portion >> start_bit_relative.into()) & mask)
-        } else {
-            let mask = T::max_value() >> start_bit_relative.into();
-            let right_boundary_shift = type_size - (nbits + start_bit_relative);
-            Some((portion & mask) >> right_boundary_shift.into())
-        }
+        Some(T::from_u128_lossy(result))
     }
 }
